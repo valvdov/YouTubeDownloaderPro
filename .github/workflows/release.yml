@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   prepare:
@@ -119,11 +119,12 @@ jobs:
           test -s release/YTDownloader-Linux.tar.gz
 
       - name: Publish release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.prepare.outputs.version }}
-          target_commitish: ${{ github.sha }}
-          name: ${{ needs.prepare.outputs.version }}
-          generate_release_notes: true
-          fail_on_unmatched_files: true
-          files: release/*
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          gh release create "$RELEASE_VERSION" release/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "$RELEASE_VERSION" \
+            --notes "Automated build from commit $GITHUB_SHA."
