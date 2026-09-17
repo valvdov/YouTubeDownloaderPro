@@ -4,8 +4,13 @@ from tkinter import messagebox, filedialog
 import threading
 import os
 import requests
+import webbrowser
 from io import BytesIO
 from PIL import Image
+from paste_support import install_paste_handler
+from download_support import yt_dlp_options, video_format
+from update_check import find_update, RELEASES_PAGE
+from version import APP_VERSION
 
 # --- Настройки темы ---
 ctk.set_appearance_mode("System")
@@ -64,6 +69,10 @@ LANG = {
 current_lang = "ru"
 
 
+def app_title():
+    return f"YouTube Downloader Pro ({APP_VERSION})" if APP_VERSION != "dev" else "YouTube Downloader Pro"
+
+
 # --- Логика приложения ---
 
 def get_full_url(user_input):
@@ -99,7 +108,7 @@ def change_language(choice):
     current_lang = "ru" if choice == "Русский" else "en"
     t = LANG[current_lang]
 
-    app.title(t["title"])
+    app.title(app_title())
     link_label.configure(text=t["link_label"])
     url_entry.configure(placeholder_text=t["placeholder"])
     preview_btn.configure(text=t["find_btn"])
@@ -139,23 +148,27 @@ def load_preview():
 def fetch_video_info(url):
     import yt_dlp
     try:
-        ydl_opts = {'quiet': True, 'skip_download': True}
+        ydl_opts = {'quiet': True, 'skip_download': True, 'noplaylist': True, **yt_dlp_options()}
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
 
         title = info.get('title', 'Unknown video')
         thumb_url = info.get('thumbnail', '')
 
+        img = None
         if thumb_url:
-            response = requests.get(thumb_url)
-            img = Image.open(BytesIO(response.content))
-            ctk_image = ctk.CTkImage(light_image=img, dark_image=img, size=(300, 170))
-            app.after(0, lambda: update_ui_preview(title, ctk_image))
-        else:
-            app.after(0, lambda: update_ui_preview(title, None))
+            try:
+                response = requests.get(thumb_url, timeout=15)
+                response.raise_for_status()
+                img = Image.open(BytesIO(response.content))
+                img.load()
+            except (requests.RequestException, OSError):
+                pass  # A missing thumbnail should not hide valid video details.
+        app.after(0, lambda: update_ui_preview(title, img))
 
     except Exception as e:
         app.after(0, lambda: status_label.configure(text=LANG[current_lang]["status_error"], text_color="red"))
+        app.after(0, lambda: messagebox.showerror("Error", str(e)))
     finally:
         app.after(0, lambda: preview_btn.configure(state="normal"))
         app.after(0, lambda: download_btn.configure(state="normal"))
@@ -163,9 +176,12 @@ def fetch_video_info(url):
 
 def update_ui_preview(title, photo):
     title_label.configure(text=title)
-    if photo:
-        thumb_label.configure(image=photo, text="")
-        thumb_label.image = photo
+    if photo is not None:
+        image = ctk.CTkImage(light_image=photo, dark_image=photo, size=(300, 170))
+        thumb_label.configure(image=image, text="")
+        thumb_label.image = image
+    else:
+        thumb_label.configure(image=None, text="[ Превью / Preview ]")
     status_label.configure(text=LANG[current_lang]["status_ready"], text_color="#2ecc71")
 
 
@@ -198,43 +214,34 @@ def start_download():
 
     mode = mode_var.get()
     quality = quality_menu.get()
+    download_btn.configure(state="disabled")
+    progress_bar.set(0)
     threading.Thread(target=process_download, args=(url, mode, quality, save_path), daemon=True).start()
 
 
 def process_download(url, mode, quality, save_path):
     import yt_dlp
     import imageio_ffmpeg
-    app.after(0, lambda: download_btn.configure(state="disabled"))
-    app.after(0, lambda: progress_bar.set(0))
     t = LANG[current_lang]
-    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
 
     try:
+        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
         outtmpl = os.path.join(save_path, '%(title)s.%(ext)s')
         ydl_opts = {
             'outtmpl': outtmpl,
             'nocolor': True,
+            'noplaylist': True,
             'ffmpeg_location': ffmpeg_exe,
-            'progress_hooks': [progress_hook]
+            'progress_hooks': [progress_hook],
+            **yt_dlp_options(),
         }
 
         # Настройка качества видео
         if mode == "video":
-            # Парсим выбранное разрешение
-            if "1080p" in quality:
-                fmt = 'bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4][height<=1080]/best'
-            elif "720p" in quality:
-                fmt = 'bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/best'
-            elif "480p" in quality:
-                fmt = 'bestvideo[ext=mp4][height<=480]+bestaudio[ext=m4a]/best[ext=mp4][height<=480]/best'
-            elif "360p" in quality:
-                fmt = 'bestvideo[ext=mp4][height<=360]+bestaudio[ext=m4a]/best[ext=mp4][height<=360]/best'
-            else:  # Лучшее
-                fmt = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
-
             ydl_opts.update({
-                'format': fmt,
+                'format': video_format(quality),
                 'merge_output_format': 'mp4',
+                'recodevideo': 'mp4',
             })
 
         # Настройка качества аудио
@@ -268,9 +275,27 @@ def process_download(url, mode, quality, save_path):
         app.after(0, lambda: download_btn.configure(state="normal"))
 
 
+def check_for_updates():
+    release = find_update(APP_VERSION)
+    if release:
+        version = release["tag_name"]
+        app.after(0, lambda: show_update_prompt(version))
+
+
+def show_update_prompt(version):
+    if current_lang == "ru":
+        title = "Доступно обновление"
+        prompt = f"Вышла версия {version}. Открыть страницу загрузки?"
+    else:
+        title = "Update available"
+        prompt = f"Version {version} is available. Open the download page?"
+    if messagebox.askyesno(title, prompt):
+        webbrowser.open(RELEASES_PAGE)
+
+
 # --- Интерфейс (GUI) ---
 app = ctk.CTk()
-app.title("YouTube Downloader Pro")
+app.title(app_title())
 app.geometry("520x720")
 app.resizable(False, False)
 
@@ -284,8 +309,9 @@ lang_menu.pack(side="right")
 link_label = ctk.CTkLabel(app, text=LANG[current_lang]["link_label"], font=("Arial", 14, "bold"))
 link_label.pack(pady=(5, 5))
 
-url_entry = ctk.CTkEntry(app, width=400, placeholder_text=LANG[current_lang]["placeholder"])
+url_entry = ctk.CTkEntry(app, width=400, placeholder_text=LANG[current_lang]["placeholder"], exportselection=False)
 url_entry.pack(pady=5)
+install_paste_handler(url_entry)
 
 preview_btn = ctk.CTkButton(app, text=LANG[current_lang]["find_btn"], command=load_preview, fg_color="gray")
 preview_btn.pack(pady=10)
@@ -348,5 +374,8 @@ status_label.pack()
 download_btn = ctk.CTkButton(app, text=LANG[current_lang]["download_btn"], command=start_download, width=200, height=40,
                              font=("Arial", 14, "bold"), fg_color="#27ae60", hover_color="#2ecc71")
 download_btn.pack(pady=10)
+
+if APP_VERSION != "dev":
+    app.after(3000, lambda: threading.Thread(target=check_for_updates, daemon=True).start())
 
 app.mainloop()

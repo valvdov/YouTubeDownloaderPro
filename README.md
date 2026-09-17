@@ -44,10 +44,21 @@ If you want to run the project using Python or build it yourself:
 ```bash
 pip install -r requirements.txt
 ```
-3. Run:
+3. Install [Deno](https://docs.deno.com/runtime/getting_started/installation/) 2.3 or newer. Recent `yt-dlp` versions require a JavaScript runtime to download YouTube videos.
+4. Run:
 ```bash
 python app.py
 ```
+
+For a standalone build, run `python build.py`. This bundles Deno and the `yt-dlp` EJS scripts into the app.
+
+## 🔄 Automatic releases
+
+Once these files are pushed to the repository's `main` branch, GitHub Actions builds and publishes Windows, macOS, and Linux releases automatically after each push and every Monday at 07:23 UTC. It installs the newest dependency versions allowed by `requirements.txt`. You can also start the workflow in GitHub's **Actions → Build and Release Apps → Run workflow** or push a `v*` tag.
+
+Published apps check the public GitHub releases page on startup and offer to open the download page when a newer version exists. Installing the downloaded update is still a user step. Source runs and local builds marked `dev` do not show update prompts.
+
+The workflow needs GitHub Actions enabled and `contents: write` permission, already declared in [release.yml](.github/workflows/release.yml). GitHub can disable scheduled workflows in public repositories after 60 days without repository activity; re-enable the workflow in the Actions tab if that happens.
 
 ## ⚖️ Legal Disclaimer
 This software is created for educational purposes only. The developer is not responsible for how this tool is used. Users are solely responsible for complying with copyright laws and the Terms of Service of the platforms from which content is downloaded.
@@ -93,10 +104,21 @@ This software is created for educational purposes only. The developer is not res
 ```bash
 pip install -r requirements.txt
 ```
-3. Запустите:
+3. Установите [Deno](https://docs.deno.com/runtime/getting_started/installation/) версии 2.3 или новее. Новым версиям `yt-dlp` он нужен для скачивания с YouTube.
+4. Запустите:
 ```bash
 python app.py
 ```
+
+Для сборки готового приложения запустите `python build.py`. Скрипт добавит Deno и EJS-файлы `yt-dlp` в сборку.
+
+## 🔄 Автоматические релизы
+
+После загрузки этих файлов в ветку `main` GitHub Actions будет собирать и публиковать версии для Windows, macOS и Linux после каждого изменения в основной ветке и каждый понедельник в 07:23 UTC. При сборке устанавливаются самые новые версии зависимостей, допустимые в `requirements.txt`. Запустить сборку вручную можно через **Actions → Build and Release Apps → Run workflow** или отправкой тега `v*`.
+
+Опубликованное приложение при запуске проверяет релизы GitHub и предлагает открыть страницу загрузки новой версии. Установка загруженного обновления остаётся действием пользователя. Запуск из исходников и локальная сборка с версией `dev` уведомления не показывают.
+
+Для работы нужны включённые GitHub Actions; право `contents: write` уже задано в [release.yml](.github/workflows/release.yml). В публичных репозиториях GitHub может отключить расписание после 60 дней без активности. Тогда запустите или включите процесс заново во вкладке Actions.
 
 ## ⚖️ Правовая оговорка (Disclaimer)
 Данное программное обеспечение создано исключительно в образовательных целях. Разработчик не несет ответственности за использование данного инструмента. Пользователь самостоятельно обязан соблюдать авторские права и Условия использования (Terms of Service) платформ, с которых производится скачивание контента.
