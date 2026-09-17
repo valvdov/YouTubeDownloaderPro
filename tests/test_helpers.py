@@ -106,7 +106,7 @@ class DownloadOptionsTests(unittest.TestCase):
         with patch.object(sys, "_MEIPASS", "/bundle", create=True), patch("os.path.isfile", return_value=True):
             options = yt_dlp_options()
         executable = "deno.exe" if os.name == "nt" else "deno"
-        self.assertEqual(options["js_runtimes"]["deno"]["path"], f"/bundle/deno/{executable}")
+        self.assertEqual(options["js_runtimes"]["deno"]["path"], os.path.join("/bundle", "deno", executable))
 
 
 class UpdateTests(unittest.TestCase):
