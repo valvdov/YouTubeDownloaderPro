@@ -1,5 +1,5 @@
 customtkinter==5.2.2
-yt-dlp[default]>=2026.08.19
+yt-dlp[default]>=2026.11.23
 imageio-ffmpeg>=0.4.9
 Pillow>=10.0.0
 requests>=2.31.0
